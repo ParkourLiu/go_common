@@ -12,7 +12,7 @@ var (
 )
 
 func init() {
-	sshSftpClient = csftp.NewSftpClient("172.16.5.137:22", "root", "1")
+	sshSftpClient = csftp.NewSftpClient("172.16.5.137:22", "root", "1", nil, true)
 }
 
 func Test_Create(t *testing.T) {
@@ -29,6 +29,7 @@ func Test_Create(t *testing.T) {
 
 }
 func Test_Close(t *testing.T) {
+	time.Sleep(5 * time.Second)
 	sshSftpClient.Close()
 	time.Sleep(5 * time.Minute)
 }
@@ -59,3 +60,10 @@ func TestSftpClient_Remove(t *testing.T) {
 	}
 }
 
+func TestCheckConn(t *testing.T) {
+	defer sshSftpClient.Close()
+	for {
+		fmt.Println(sshSftpClient.GetSftpClient().Getwd())
+		time.Sleep(3 * time.Second)
+	}
+}
