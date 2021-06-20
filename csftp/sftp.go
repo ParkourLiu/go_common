@@ -10,14 +10,6 @@ import (
 	"time"
 )
 
-var (
-	log *clogs.Log
-)
-
-func init() {
-	log = clogs.NewLog("7")
-}
-
 type SftpClient struct {
 	sSH_ADDR     string
 	sSH_USER     string
@@ -27,6 +19,7 @@ type SftpClient struct {
 	proxyInfo    *ProxyInfo //代理信息
 	conn         net.Conn
 	checkBreak   bool //是否停止检查连通性的开关
+	log          *clogs.Log
 }
 
 //代理信息的结构体
@@ -36,7 +29,7 @@ type ProxyInfo struct {
 	AuthPassword string //代理密码
 }
 
-func NewSftpClient(sshAddr, sshUser, sshPassword string, proxyInfo *ProxyInfo, checkConnect bool) *SftpClient {
+func NewSftpClient(sshAddr, sshUser, sshPassword string, proxyInfo *ProxyInfo, checkConnect bool, log *clogs.Log) *SftpClient {
 	var sshClient *ssh.Client
 	var err error
 	var proxyConn net.Conn
@@ -99,6 +92,7 @@ agenSSH:
 		sftpClient:   sftpClient,
 		proxyInfo:    proxyInfo,
 		conn:         proxyConn,
+		log:          log,
 	}
 	if checkConnect {
 		go sc.checkConn() //监控连通性
@@ -121,7 +115,7 @@ func (c *SftpClient) checkConn() {
 				_ = c.sshClient.Close()
 			}
 			c.checkBreak = false //复位开关
-			log.Info("sshSftpCilent conn is close")
+			c.log.Info("sshSftpCilent conn is close")
 			return
 		}
 
@@ -129,7 +123,7 @@ func (c *SftpClient) checkConn() {
 		_, err := c.sftpClient.Getwd()
 		if err != nil {
 			//连接出错,开始重新初始化
-			log.Error(err)
+			c.log.Error(err)
 
 			if c.sftpClient != nil {
 				_ = c.sftpClient.Close()
@@ -140,7 +134,7 @@ func (c *SftpClient) checkConn() {
 			if c.sshClient != nil {
 				_ = c.sshClient.Close()
 			}
-			sc := NewSftpClient(c.sSH_ADDR, c.sSH_USER, c.sSH_PASSWORD, c.proxyInfo, false) //创建新的链接
+			sc := NewSftpClient(c.sSH_ADDR, c.sSH_USER, c.sSH_PASSWORD, c.proxyInfo, false, c.log) //创建新的链接
 			c.sshClient = sc.sshClient
 			c.sftpClient = sc.sftpClient
 			c.conn = sc.conn
@@ -203,4 +197,9 @@ func (c *SftpClient) Download(srcPath string) ([]byte, error) {
 //删除文件或者文件夹
 func (c *SftpClient) Remove(path string) error {
 	return c.sftpClient.Remove(path)
+}
+
+//移动文件夹
+func (c *SftpClient) Rename(oldPath, newPath string) error {
+	return c.sftpClient.Rename(oldPath, newPath)
 }

@@ -112,7 +112,7 @@ func TestRedisClient_Hset(t *testing.T) {
 	}
 }
 func TestRedisClient_Hget(t *testing.T) {
-	values, err := redisClient.Hget("aa", "aa")
+	values, err := redisClient.Hget("hashtest", "aaa")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,14 +139,14 @@ func TestRedisClient_Lpush(t *testing.T) {
 	}
 }
 func TestRedisClient_Rpush(t *testing.T) {
-	err := redisClient.Rpush("bb", "a")
+	err := redisClient.Rpush("listtest", "a")
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestRedisClient_Lrange(t *testing.T) {
-	values, err := redisClient.Lrange("bb", 0, -1)
+	values, err := redisClient.Lrange("listtest", 0, -1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,4 +199,27 @@ func TestRedisClient_Smembers(t *testing.T) {
 		t.Fatal(err)
 	}
 	fmt.Println(values)
+}
+
+func TestRedisClient_ZrangeWithscores(t *testing.T) {
+	values, err := redisClient.ZrangeWithscores("zsettest", 0, -1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println(values)
+}
+
+func TestHdel(t *testing.T) {
+	err := redisClient.Hdel("hashtest", "bbbb")
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHlen(t *testing.T) {
+	len, err := redisClient.Hlen("IPa")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println(len)
 }

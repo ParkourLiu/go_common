@@ -7,16 +7,11 @@ import (
 	"go_common/clogs"
 )
 
-var log *clogs.Log
-
-func init() {
-	log = clogs.NewLog("7")
-}
-
 type MysqlClient struct {
 	db        *sql.DB
 	mysqlInfo *MysqlInfo
 	//checkBreak bool //是否停止检查连通性的开关,   mysql库内部已实现断开自动重连机制，无需再实现此功能
+	log *clogs.Log
 }
 type MysqlInfo struct {
 	UserName     string
@@ -26,6 +21,7 @@ type MysqlInfo struct {
 	DatabaseName string
 	//MaxOpenConns int //用于设置最大打开的连接数，默认值为0表示不限制。
 	MaxIdleConns int //用于设置闲置的连接数，默认值为0表示不保留空闲连接。但是在远程连接中，0会因为并发报错
+	Log          *clogs.Log
 }
 type Stmt struct {
 	Sql  string
@@ -34,9 +30,18 @@ type Stmt struct {
 
 func NewMysqlClient(mysqlInfo *MysqlInfo) *MysqlClient {
 	////uri: "root:zaq12wsx1@tcp(localhost:3306)/mm?charset=utf8"
-	uri := mysqlInfo.UserName + ":" + mysqlInfo.Password + "@tcp(" + mysqlInfo.IP + ":" + mysqlInfo.Port + ")/" + mysqlInfo.DatabaseName + "?charset=utf8&allowOldPasswords=1" //allowOldPasswords=1是为了兼容老版本mysql
+	uri := mysqlInfo.UserName + ":" + mysqlInfo.Password + "@tcp(" + mysqlInfo.IP + ":" + mysqlInfo.Port + ")/" + mysqlInfo.DatabaseName + "?charset=utf8mb4&allowOldPasswords=1" //allowOldPasswords=1是为了兼容老版本mysql
+	if mysqlInfo.Log != nil {
+		mysqlInfo.Log.Info(uri)
+	}
 	db, _ := sql.Open("mysql", uri)
-	_ = db.Ping()
+	err := db.Ping()
+	if err != nil {
+		if mysqlInfo.Log != nil {
+			mysqlInfo.Log.Error(err)
+		}
+		panic(err)
+	}
 	if mysqlInfo.MaxIdleConns < 30 {
 		mysqlInfo.MaxIdleConns = 30
 	}

@@ -5,23 +5,22 @@ import (
 	"go_common/clogs"
 )
 
-var log *clogs.Log
-
-func init() {
-	log = clogs.NewLog("7")
-}
+var ErrNil = redis.ErrNil.Error() //返回值为nil
 
 type RedisClient struct {
 	pool *redis.Pool
+	log  *clogs.Log
 }
 type RedisInfo struct {
 	Addr      string
 	Password  string
 	MaxIdle   int //最大空闲数,最大的空闲连接数，表示即使没有redis连接时依然可以保持N个空闲的连接，而不被清除，随时处于待命状态。
 	MaxActive int //最大连接数，表示同时最多有N个连接 0为不限制连接
+	Log       *clogs.Log
 }
 
 func NewRedisClient(redisInfo *RedisInfo) *RedisClient {
+	redisInfo.Log.Info("INIT redis:", redisInfo)
 	p := &redis.Pool{
 		MaxIdle:   redisInfo.MaxIdle,
 		MaxActive: redisInfo.MaxActive,
@@ -34,7 +33,7 @@ func NewRedisClient(redisInfo *RedisInfo) *RedisClient {
 
 		},
 	}
-	r := &RedisClient{pool: p}
+	r := &RedisClient{pool: p, log: redisInfo.Log}
 	return r
 }
 
@@ -93,7 +92,7 @@ func (c *RedisClient) Setnx(key, value string) (int64, error) {
 func (c *RedisClient) Hmset(key string, value interface{}) error {
 	conn := c.pool.Get()
 	if err := conn.Err(); err != nil {
-		log.Error(err)
+		c.log.Error(err)
 		return err
 	}
 	defer conn.Close()
@@ -104,7 +103,7 @@ func (c *RedisClient) Hmset(key string, value interface{}) error {
 func (c *RedisClient) Hmget(key string, subkey ...interface{}) (values []string, err error) {
 	conn := c.pool.Get()
 	if err := conn.Err(); err != nil {
-		log.Error(err)
+		c.log.Error(err)
 		return nil, err
 	}
 	defer conn.Close()
@@ -117,13 +116,19 @@ func (c *RedisClient) Hset(key string, subkey string, value string) error {
 func (c *RedisClient) Hget(key, subkey string) (values string, err error) {
 	return c.returnStringError("HGET", key, subkey)
 }
+func (c *RedisClient) Hdel(key, subkey string) (err error) { //删除指定的subkey
+	return c.returnError("HDEL", key, subkey)
+}
+func (c *RedisClient) Hlen(key string) (len int64, err error) { //获取hash有多少个subkey
+	return c.returnInt64Error("HLEN", key)
+}
 func (c *RedisClient) HgetAllMap(key string) (value map[string]string, err error) {
 	return c.returnStringMapError("HGETALL", key)
 }
 func (c *RedisClient) HgetAllStruct(key string, value interface{}) (err error) {
 	conn := c.pool.Get()
 	if err := conn.Err(); err != nil {
-		log.Error(err)
+		c.log.Error(err)
 		return err
 	}
 	defer conn.Close()
@@ -195,13 +200,33 @@ func (c *RedisClient) Smembers(key string) ([]string, error) {
 //* set */============================================================end
 
 //* zset */============================================================begin
+func (c *RedisClient) Zadd(key string, score int64, member string) (err error) {
+	return c.returnError("ZADD", key, score, member)
+}
+
+func (c *RedisClient) Zscore(key string, member string) (score int64, err error) { //获得分值
+	return c.returnInt64Error("Zscore", key, member)
+}
+
+//分值高到低排序
+func (c *RedisClient) Zrange(key string, startIndex int64, endIndex int64) (value []string, err error) {
+	return c.returnStringsError("ZREVRANGE", key, startIndex, endIndex)
+}
+
+//分值高到低排序,并且同步返回此分值score
+func (c *RedisClient) ZrangeWithscores(key string, startIndex int64, endIndex int64) (value []string, err error) {
+	return c.returnStringsError("ZREVRANGE", key, startIndex, endIndex, "withscores")
+}
+func (c *RedisClient) Zrem(key string, value string) (err error) {
+	return c.returnError("ZREM", key, value)
+}
 
 //* zset */============================================================end
 //返回类型封装------------------------------------------------------------------------------------------------------------------------------------
 func (c *RedisClient) returnError(commandName string, in ...interface{}) error {
 	conn := c.pool.Get()
 	if err := conn.Err(); err != nil {
-		log.Error(err)
+		c.log.Error(err)
 		return err
 	}
 	defer conn.Close()
@@ -212,7 +237,7 @@ func (c *RedisClient) returnError(commandName string, in ...interface{}) error {
 func (c *RedisClient) returnBoolError(commandName string, in ...interface{}) (bool, error) {
 	conn := c.pool.Get()
 	if err := conn.Err(); err != nil {
-		log.Error(err)
+		c.log.Error(err)
 		return false, err
 	}
 	defer conn.Close()
@@ -222,17 +247,16 @@ func (c *RedisClient) returnBoolError(commandName string, in ...interface{}) (bo
 func (c *RedisClient) returnStringError(commandName string, in ...interface{}) (string, error) {
 	conn := c.pool.Get()
 	if err := conn.Err(); err != nil {
-		log.Error(err)
+		c.log.Error(err)
 		return "", err
 	}
 	defer conn.Close()
-
 	return redis.String(conn.Do(commandName, in...))
 }
 func (c *RedisClient) returnStringsError(commandName string, in ...interface{}) ([]string, error) {
 	conn := c.pool.Get()
 	if err := conn.Err(); err != nil {
-		log.Error(err)
+		c.log.Error(err)
 		return nil, err
 	}
 	defer conn.Close()
@@ -242,7 +266,7 @@ func (c *RedisClient) returnStringsError(commandName string, in ...interface{}) 
 func (c *RedisClient) returnInt64Error(commandName string, in ...interface{}) (int64, error) {
 	conn := c.pool.Get()
 	if err := conn.Err(); err != nil {
-		log.Error(err)
+		c.log.Error(err)
 		return 0, err
 	}
 	defer conn.Close()
@@ -253,7 +277,7 @@ func (c *RedisClient) returnInt64Error(commandName string, in ...interface{}) (i
 func (c *RedisClient) returnStringMapError(commandName string, in ...interface{}) (map[string]string, error) {
 	conn := c.pool.Get()
 	if err := conn.Err(); err != nil {
-		log.Error(err)
+		c.log.Error(err)
 		return nil, err
 	}
 	defer conn.Close()
@@ -264,7 +288,7 @@ func (c *RedisClient) returnStringMapError(commandName string, in ...interface{}
 func (c *RedisClient) returnArgsError(commandName string, key string, value ...interface{}) error {
 	conn := c.pool.Get()
 	if err := conn.Err(); err != nil {
-		log.Error(err)
+		c.log.Error(err)
 		return err
 	}
 	defer conn.Close()

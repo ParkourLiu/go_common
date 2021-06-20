@@ -17,20 +17,35 @@ type Log struct {
 //	log.Notice("log3--->Notice")     //5
 //	log.Info("log3--->Info")         //6
 //	log.Debug("log3--->Debug")       //7
-func NewLog(logLevel string) *Log {
+func NewLog(logLevel string, Async bool) *Log {
 	log := logs.NewLogger()
+	if Async {
+		log.Async() //设置异步
+	}
 	log.EnableFuncCallDepth(true) //设置打印行号
 	log.SetLogFuncCallDepth(3)    //设置打印深度
 	log.SetLogger(logs.AdapterConsole, `{"level":`+logLevel+`}`)
 	return &Log{log: log}
 }
+
+func NewFileLog(logName, logLevel string, Async bool) *Log {
+	log := logs.NewLogger()
+	if Async {
+		log.Async() //设置异步
+	}
+	log.EnableFuncCallDepth(true) //设置打印行号
+	log.SetLogFuncCallDepth(3)    //设置打印深度
+	//`{"level":7,"filename":"test.log","separate":["error", "warning", "info", "debug"]}`
+	log.SetLogger(logs.AdapterMultiFile, `{"level":`+logLevel+`,"filename":"`+logName+`","separate":["error","warning","info","debug"]}`)
+	return &Log{log: log}
+}
+
 func (l *Log) Debug(v ...interface{}) {
 	l.log.Debug(strings.Repeat("%v ", len(v)), v...)
 }
 func (l *Log) Warn(v ...interface{}) {
 	l.log.Warn(strings.Repeat("%v ", len(v)), v...)
 }
-
 func (l *Log) Info(v ...interface{}) {
 	l.log.Info(strings.Repeat("%v ", len(v)), v...)
 }
