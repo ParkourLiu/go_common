@@ -28,3 +28,8 @@ func String(key string) string {
 func Int(key string) (int, error) {
 	return cfg.Int(runmode, key)
 }
+
+func Reload() (err error) {
+	cfg, err = config.ReadDefault("./conf/app.conf") //读取配置文件，并返回其Config
+	return
+}

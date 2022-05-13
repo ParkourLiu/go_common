@@ -7,6 +7,7 @@ import (
 	"golang.org/x/net/proxy"
 	"io/ioutil"
 	"net"
+	"strings"
 	"time"
 )
 
@@ -170,8 +171,15 @@ func (c *SftpClient) Close() {
 
 //上传文件
 func (c *SftpClient) Upload(fileBytes []byte, dstPath, dstFileName string) error {
+	if !strings.HasSuffix(dstPath, "/") {
+		dstPath = dstPath + "/"
+	}
 	fileName := dstPath + dstFileName
 	tmpFileName := fileName + ".tmp"
+	err := c.sftpClient.MkdirAll(dstPath) //创建目录
+	if err != nil {
+		return err
+	}
 	dstFile, err := c.sftpClient.Create(tmpFileName) //远程
 	if err != nil {
 		return err

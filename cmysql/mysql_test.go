@@ -2,12 +2,14 @@ package cmysql_test
 
 import (
 	"fmt"
+	"go_common/clogs"
 	"go_common/cmysql"
 	"testing"
 	"time"
 )
 
 var mysqlClient *cmysql.MysqlClient
+var log = clogs.NewLog("7", false)
 
 func init() {
 	mysqlClient = cmysql.NewMysqlClient(&cmysql.MysqlInfo{
@@ -15,8 +17,12 @@ func init() {
 		Password:     "root",
 		IP:           "127.0.0.1",
 		Port:         "3306",
-		DatabaseName: "aaa",
+		DatabaseName: "test",
 		MaxIdleConns: 1000,
+		Log:          log,
+		ConnArgs: map[string]string{
+			"parseTime": "true",
+		},
 	})
 }
 
@@ -112,4 +118,60 @@ func TestCheckConn(t *testing.T) {
 		fmt.Println(i)
 		time.Sleep(5 * time.Second)
 	}
+}
+
+//关闭mysql，然后再打开，查看mysql是否重连
+func TestMysqlClient_SearchFormat(t *testing.T) {
+	type User struct {
+		Id   int       `json:"iii,omitempty"`
+		Name string    `json:"name,omitempty"`
+		Ct   time.Time `json:"ct,omitempty"`
+	}
+	var count int
+	err := mysqlClient.SearchFormat(&cmysql.Stmt{Sql: "SELECT count(1) FROM user where id>1", Args: []interface{}{}}, &count)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	log.Info(count)
+
+	var us []User
+	err = mysqlClient.SearchFormat(&cmysql.Stmt{Sql: "SELECT * FROM user where id>1", Args: []interface{}{}}, &us)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	log.Info(us)
+
+	var u User
+	err = mysqlClient.SearchFormat(&cmysql.Stmt{Sql: "SELECT * FROM user where id=1", Args: []interface{}{}}, &u)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	log.Info(u)
+
+	var ms []map[string]interface{}
+	err = mysqlClient.SearchFormat(&cmysql.Stmt{Sql: "SELECT * FROM user where id>1", Args: []interface{}{}}, &ms)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	log.Info(ms)
+
+	var m map[string]string
+	err = mysqlClient.SearchFormat(&cmysql.Stmt{Sql: "SELECT * FROM user where id=1", Args: []interface{}{}}, &m)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	log.Info(m)
+
+	var ss []string
+	err = mysqlClient.SearchFormat(&cmysql.Stmt{Sql: "SELECT name FROM user where id>1", Args: []interface{}{}}, &ss)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	log.Info(ss)
 }

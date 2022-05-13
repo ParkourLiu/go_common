@@ -12,6 +12,7 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -19,6 +20,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -83,6 +85,9 @@ func Dec3(byt, pKeyTemp []byte, divisor int) []byte {
 }
 
 func WriteFile(byt []byte, path, name string) error {
+	if !strings.HasSuffix(path, "/") && !strings.HasSuffix(path, "\\") { //不是以这两个结尾就先加上结尾
+		path = path + "/"
+	}
 	err := CreateDir(path)
 	if err != nil {
 		return err
@@ -136,12 +141,21 @@ func HTTPrequest(method, url string, headMap map[string]string, bodybytes []byte
 	if err != nil {
 		return nil, err
 	}
+	if request != nil {
+		if request.Body != nil {
+			defer func() {
+				_ = request.Body.Close()
+				request.Close = true
+			}()
+		}
+	}
 	//添加头信息
 	for k, v := range headMap {
 		request.Header[k] = []string{v}
 	}
 	httpClient := &http.Client{
 		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 			DialContext: func(ctx context.Context, network, addr string) (conn net.Conn, e error) {
 				conn, err := net.Dial("tcp", addr)
 				if err != nil {
@@ -212,38 +226,38 @@ func HTTPSrequest(method, url string, headMap map[string]string, bodybytes []byt
 	return ioutil.ReadAll(resp.Body)
 }
 
-//func CreatRsaKey() error {
-//	// 生成私钥文件
-//	privateKey, err := rsa.GenerateKey(rand.Reader, 1024) //默认1024长度
-//	if err != nil {
-//		return err
-//	}
-//	derStream, _ := x509.MarshalPKCS8PrivateKey(privateKey)
-//	//derStream := x509.MarshalPKCS1PrivateKey(privateKey)
-//	priBlock := &pem.Block{
-//		Type:  "RSA PRIVATE KEY",
-//		Bytes: derStream,
-//	}
-//
-//	fmt.Printf("=======私钥文件内容=========\n%v", string(pem.EncodeToMemory(priBlock)))
-//	// 生成公钥文件
-//	publicKey := &privateKey.PublicKey
-//	derPkix, err := x509.MarshalPKIXPublicKey(publicKey)
-//	if err != nil {
-//		return err
-//	}
-//	publicBlock := &pem.Block{
-//		Type:  "PUBLIC KEY",
-//		Bytes: derPkix,
-//	}
-//
-//	fmt.Printf("=======公钥文件内容=========\n%v", string(pem.EncodeToMemory(publicBlock)))
-//
-//	if err != nil {
-//		return err
-//	}
-//	return nil
-//}
+func CreatRsaKey() error {
+	// 生成私钥文件
+	privateKey, err := rsa.GenerateKey(rand.Reader, 1024) //默认1024长度
+	if err != nil {
+		return err
+	}
+	derStream, _ := x509.MarshalPKCS8PrivateKey(privateKey)
+	//derStream := x509.MarshalPKCS1PrivateKey(privateKey)
+	priBlock := &pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: derStream,
+	}
+
+	fmt.Printf("=======私钥文件内容=========\n%v", string(pem.EncodeToMemory(priBlock)))
+	// 生成公钥文件
+	publicKey := &privateKey.PublicKey
+	derPkix, err := x509.MarshalPKIXPublicKey(publicKey)
+	if err != nil {
+		return err
+	}
+	publicBlock := &pem.Block{
+		Type:  "PUBLIC KEY",
+		Bytes: derPkix,
+	}
+
+	fmt.Printf("=======公钥文件内容=========\n%v", string(pem.EncodeToMemory(publicBlock)))
+
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
 //rsa分段加密   密钥长度，默认为1024位  超过不适用
 func RsaSubEnc(dataBytes []byte, pubKey []byte) ([]byte, error) {
@@ -413,4 +427,56 @@ func GetLocalIP() string {
 	}
 	ip = strings.Trim(ip, "/")
 	return ip
+}
+
+//传入 头字段顺序，数据
+func CsvExport(heads []string, datass [][]string, havaMark bool) []byte {
+	buf := bytes.Buffer{}
+	for i, field := range heads { //拼接头字段
+		addMark(&buf, havaMark) //防止逗号
+		buf.WriteString(field)
+		addMark(&buf, havaMark) //防止逗号
+		if i < len(heads)-1 {
+			buf.WriteString(`,`)
+		} else {
+			buf.WriteString("\r\n")
+		}
+	}
+	for _, datas := range datass {
+		for i, data := range datas { //按头顺序取值
+			addMark(&buf, havaMark) //防止逗号
+			buf.WriteString(data)
+			addMark(&buf, havaMark) //防止逗号
+			if i < len(datas)-1 {
+				buf.WriteString(`,`)
+			} else {
+				buf.WriteString("\r\n")
+			}
+		}
+	}
+	return buf.Bytes()
+}
+
+func addMark(buf *bytes.Buffer, havaMark bool) {
+	if havaMark {
+		buf.WriteString(`"`)
+	}
+}
+
+var (
+	divisor       = 0
+	lastTimestamp = time.Now().UnixNano() / 1e6
+	nextIdLock    = &sync.Mutex{}
+)
+
+func NextId(machineId string) string {
+	nextIdLock.Lock()
+	defer nextIdLock.Unlock()
+	timestamp := time.Now().UnixNano() / 1e6
+	if timestamp > lastTimestamp {
+		lastTimestamp = timestamp
+		divisor = 0
+	}
+	divisor++
+	return fmt.Sprint(lastTimestamp) + "_" + fmt.Sprint(divisor) + machineId
 }

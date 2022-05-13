@@ -2,18 +2,21 @@ package credis_test
 
 import (
 	"fmt"
+	"go_common/clogs"
 	"go_common/credis"
 	"testing"
 	"time"
 )
 
 var redisClient *credis.RedisClient
+var log = clogs.NewLog("7", false)
 
 func init() {
 	redisClient = credis.NewRedisClient(&credis.RedisInfo{
 		Addr:     "127.0.0.1:6379",
 		Password: "",
 		MaxIdle:  200,
+		Log:      log,
 	})
 }
 func TestRedisClient_Expire_AND_Exists(t *testing.T) {
@@ -68,10 +71,8 @@ func TestRedisClient_Exists(t *testing.T) {
 	fmt.Println(str)
 }
 func TestRedisClient_Del(t *testing.T) {
-	err := redisClient.Del("aa", "a", "aaa")
-	if err != nil {
-		t.Fatal(err)
-	}
+	log.Info(redisClient.Del("aa", "a", "aaa"))
+
 }
 func TestRedisClient_Keys(t *testing.T) {
 	strs, err := redisClient.Keys("list*")
@@ -187,7 +188,7 @@ func TestRedisClient_Scard(t *testing.T) {
 	fmt.Println(values)
 }
 func TestRedisClient_Sismember(t *testing.T) {
-	values, err := redisClient.Sismember("ss", "ss3 ss4 aaaa")
+	values, err := redisClient.Sismember("ssss", "ss3 ss4 aaaa")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,9 +218,20 @@ func TestHdel(t *testing.T) {
 }
 
 func TestHlen(t *testing.T) {
-	len, err := redisClient.Hlen("IPa")
+	len, err := redisClient.Hlen("IPaaaaa")
 	if err != nil {
 		t.Fatal(err)
 	}
 	fmt.Println(len)
+}
+
+func TestHexists(t *testing.T) {
+	fmt.Println(redisClient.Hexists("aaaa", "a"))
+}
+
+func TestSrem(t *testing.T) {
+	fmt.Println(redisClient.Srem("a", ))
+}
+func TestZscore(t *testing.T) {
+	fmt.Println(redisClient.Zscore("a", "aqa"))
 }

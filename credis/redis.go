@@ -24,11 +24,22 @@ func NewRedisClient(redisInfo *RedisInfo) *RedisClient {
 	p := &redis.Pool{
 		MaxIdle:   redisInfo.MaxIdle,
 		MaxActive: redisInfo.MaxActive,
-		Dial: func() (redis.Conn, error) {
+		// 且当前Active连接数 < MaxActive
+		// 则等待
+		Wait: true,
+		Dial: func() (conn redis.Conn, err error) {
 			if redisInfo.Password == "" {
-				return redis.Dial("tcp", redisInfo.Addr)
+				conn, err = redis.Dial("tcp", redisInfo.Addr)
+				if err != nil {
+					panic(err)
+				}
+				return
 			} else {
-				return redis.Dial("tcp", redisInfo.Addr, redis.DialPassword(redisInfo.Password))
+				conn, err = redis.Dial("tcp", redisInfo.Addr, redis.DialPassword(redisInfo.Password))
+				if err != nil {
+					panic(err)
+				}
+				return
 			}
 
 		},
@@ -147,6 +158,14 @@ func (c RedisClient) Hincrby(key, subkey string, count int) (int64, error) {
 	return c.returnInt64Error("HINCRBY", key, subkey, count)
 }
 
+func (c RedisClient) Hexists(key, subkey string) (ok bool, err error) {
+	r, err := c.returnInt64Error("HEXISTS", key, subkey)
+	if r == 1 {
+		ok = true
+	}
+	return
+}
+
 //* hash */============================================================end
 //* list */============================================================begin
 func (c *RedisClient) Lpush(key string, value string) error {
@@ -182,6 +201,10 @@ func (c *RedisClient) Sadd(key string, value string) error {
 	return c.returnError("SADD", key, value)
 }
 
+func (c *RedisClient) Srem(key string, value ...string) error {
+	return c.returnError("SREM", redis.Args{}.Add(key).AddFlat(value)...)
+}
+
 //返回成员数量
 func (c *RedisClient) Scard(key string) (int64, error) {
 	return c.returnInt64Error("SCARD", key)
@@ -213,7 +236,7 @@ func (c *RedisClient) Zrange(key string, startIndex int64, endIndex int64) (valu
 	return c.returnStringsError("ZREVRANGE", key, startIndex, endIndex)
 }
 
-//分值高到低排序,并且同步返回此分值score
+//分值高到低排序,并且同步返回此分值score,返回全部数据，则传参为 startIndex 0   endIndex -1
 func (c *RedisClient) ZrangeWithscores(key string, startIndex int64, endIndex int64) (value []string, err error) {
 	return c.returnStringsError("ZREVRANGE", key, startIndex, endIndex, "withscores")
 }
@@ -225,73 +248,100 @@ func (c *RedisClient) Zrem(key string, value string) (err error) {
 //返回类型封装------------------------------------------------------------------------------------------------------------------------------------
 func (c *RedisClient) returnError(commandName string, in ...interface{}) error {
 	conn := c.pool.Get()
+	defer func() {
+		if conn != nil {
+			conn.Close()
+		}
+	}()
 	if err := conn.Err(); err != nil {
 		c.log.Error(err)
 		return err
 	}
-	defer conn.Close()
 
 	_, err := conn.Do(commandName, in...)
 	return err
 }
 func (c *RedisClient) returnBoolError(commandName string, in ...interface{}) (bool, error) {
 	conn := c.pool.Get()
+	defer func() {
+		if conn != nil {
+			conn.Close()
+		}
+	}()
 	if err := conn.Err(); err != nil {
 		c.log.Error(err)
 		return false, err
 	}
-	defer conn.Close()
-
 	return redis.Bool(conn.Do(commandName, in...))
 }
 func (c *RedisClient) returnStringError(commandName string, in ...interface{}) (string, error) {
 	conn := c.pool.Get()
+	defer func() {
+		if conn != nil {
+			conn.Close()
+		}
+	}()
 	if err := conn.Err(); err != nil {
 		c.log.Error(err)
 		return "", err
 	}
-	defer conn.Close()
 	return redis.String(conn.Do(commandName, in...))
 }
 func (c *RedisClient) returnStringsError(commandName string, in ...interface{}) ([]string, error) {
 	conn := c.pool.Get()
+	defer func() {
+		if conn != nil {
+			conn.Close()
+		}
+	}()
 	if err := conn.Err(); err != nil {
 		c.log.Error(err)
 		return nil, err
 	}
-	defer conn.Close()
 
 	return redis.Strings(conn.Do(commandName, in...))
 }
 func (c *RedisClient) returnInt64Error(commandName string, in ...interface{}) (int64, error) {
 	conn := c.pool.Get()
+	defer func() {
+		if conn != nil {
+			conn.Close()
+		}
+	}()
 	if err := conn.Err(); err != nil {
 		c.log.Error(err)
 		return 0, err
 	}
-	defer conn.Close()
 
 	return redis.Int64(conn.Do(commandName, in...))
 }
 
 func (c *RedisClient) returnStringMapError(commandName string, in ...interface{}) (map[string]string, error) {
 	conn := c.pool.Get()
+	defer func() {
+		if conn != nil {
+			conn.Close()
+		}
+	}()
 	if err := conn.Err(); err != nil {
 		c.log.Error(err)
 		return nil, err
 	}
-	defer conn.Close()
 
 	return redis.StringMap(conn.Do(commandName, in...))
 }
 
 func (c *RedisClient) returnArgsError(commandName string, key string, value ...interface{}) error {
 	conn := c.pool.Get()
+	defer func() {
+		if conn != nil {
+			conn.Close()
+		}
+	}()
 	if err := conn.Err(); err != nil {
 		c.log.Error(err)
 		return err
 	}
-	defer conn.Close()
 
 	_, err := conn.Do(commandName, redis.Args{}.Add(key).AddFlat(value)...)
 	return err

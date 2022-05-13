@@ -3,6 +3,7 @@ package cmysql
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"go_common/clogs"
 )
@@ -20,7 +21,8 @@ type MysqlInfo struct {
 	Port         string
 	DatabaseName string
 	//MaxOpenConns int //用于设置最大打开的连接数，默认值为0表示不限制。
-	MaxIdleConns int //用于设置闲置的连接数，默认值为0表示不保留空闲连接。但是在远程连接中，0会因为并发报错
+	MaxIdleConns int               //用于设置闲置的连接数，默认值为0表示不保留空闲连接。但是在远程连接中，0会因为并发报错
+	ConnArgs     map[string]string //连接参数
 	Log          *clogs.Log
 }
 type Stmt struct {
@@ -30,7 +32,10 @@ type Stmt struct {
 
 func NewMysqlClient(mysqlInfo *MysqlInfo) *MysqlClient {
 	////uri: "root:zaq12wsx1@tcp(localhost:3306)/mm?charset=utf8"
-	uri := mysqlInfo.UserName + ":" + mysqlInfo.Password + "@tcp(" + mysqlInfo.IP + ":" + mysqlInfo.Port + ")/" + mysqlInfo.DatabaseName + "?charset=utf8mb4&allowOldPasswords=1" //allowOldPasswords=1是为了兼容老版本mysql
+	uri := mysqlInfo.UserName + ":" + mysqlInfo.Password + "@tcp(" + mysqlInfo.IP + ":" + mysqlInfo.Port + ")/" + mysqlInfo.DatabaseName + "?charset=utf8mb4&allowOldPasswords=1" //charset=utf8mb4&     allowOldPasswords=1是为了兼容老版本mysql
+	for k, v := range mysqlInfo.ConnArgs {
+		uri = fmt.Sprintf("%s&%s=%s", uri, k, v)
+	}
 	if mysqlInfo.Log != nil {
 		mysqlInfo.Log.Info(uri)
 	}
@@ -152,9 +157,9 @@ func getRows(rows *sql.Rows) ([]map[string]string, error) {
 	var result map[string]string
 	var dest []interface{}
 	for rows.Next() {
-		rawResult = make([][]byte, len(cols))
 		result = make(map[string]string, len(cols))
 		dest = make([]interface{}, len(cols))
+		rawResult = make([][]byte, len(cols))
 		for i, _ := range rawResult {
 			dest[i] = &rawResult[i]
 		}
@@ -163,6 +168,7 @@ func getRows(rows *sql.Rows) ([]map[string]string, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		for i, raw := range rawResult {
 			if raw == nil {
 				result[cols[i]] = ""
